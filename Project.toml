@@ -49,7 +49,7 @@ SpecialFunctions = "2"
 StableRNGs = "1"
 TemporalGPs = "0.6"
 Turing = "0.32"
-julia = "1"
+julia = "1.10"
 
 [extras]
 AbstractGPs = "99985d1d-32ba-4be9-9821-2ec096f28918"

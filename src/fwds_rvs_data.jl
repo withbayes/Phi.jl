@@ -28,6 +28,122 @@ increment!!(x::F, y::F) where {F<:FData} = F(tuple_map(increment!!, x.data, y.da
     fdata_type(T)
 
 Returns the type of the forwards data associated to a tangent of type `T`.
+
+# Extended help
+
+Rules in Tapir.jl do not operate on tangents directly.
+Rather, functionality is defined to split each tangent into two components, that we call _fdata_ (forwards-pass data) and _rdata_ (reverse-pass data).
+In short, any component of a tangent which is identified by its address (e.g. a `mutable struct`s or an `Array`) gets passed around on the forwards-pass of AD and is incremented in-place on the reverse-pass, while components of tangents identified by their value get propagated and accumulated only on the reverse-pass.
+
+Given a tangent type `T`, you can find out what type its fdata and rdata must be with `fdata_type(T)` and `rdata_type(T)` respectively.
+A consequence of this is that there is exactly one valid fdata type and rdata type for each primal type.
+
+Given a tangent `t`, you can get its fdata and rdata using `f = fdata(t)` and `r = rdata(t)` respectively.
+`f` and `r` can be re-combined to recover the original tangent using the binary version of `tangent`: `tangent(f, r)`.
+It must always hold that
+```julia
+tangent(fdata(t), rdata(t)) === t
+```
+
+The need for all of this is explained in the docs, but for now it suffices to consider our running examples again, and to see what their fdata and rdata look like.
+
+#### Int
+
+`Int`s are non-differentiable types, so there is nothing to pass around on the forwards- or reverse-pass.
+Therefore
+```jldoctest
+julia> fdata_type(tangent_type(Int)), rdata_type(tangent_type(Int))
+(NoFData, NoRData)
+```
+
+#### Float64
+
+The tangent type of `Float64` is `Float64`.
+`Float64`s are identified by their value / have no fixed address, so
+```jldoctest
+julia> (fdata_type(Float64), rdata_type(Float64))
+(NoFData, Float64)
+```
+
+#### Vector{Float64}
+
+The tangent type of `Vector{Float64}` is `Vector{Float64}`.
+A `Vector{Float64}` is identified by its address, so
+```jldoctest
+julia> (fdata_type(Vector{Float64}), rdata_type(Vector{Float64}))
+(Vector{Float64}, NoRData)
+```
+
+#### Tuple{Float64, Vector{Float64}, Int}
+
+This is an example of a type which has both fdata and rdata.
+The tangent type for `Tuple{Float64, Vector{Float64}, Int}` is
+`Tuple{Float64, Vector{Float64}, NoTangent}`.
+`Tuple`s have no fixed memory address, so we interogate each field on its own.
+We have already established the fdata and rdata types for each element, so we recurse to obtain:
+```jldoctest
+julia> T = tangent_type(Tuple{Float64, Vector{Float64}, Int})
+Tuple{Float64, Vector{Float64}, NoTangent}
+
+julia> (fdata_type(T), rdata_type(T))
+(Tuple{NoFData, Vector{Float64}, NoFData}, Tuple{Float64, NoRData, NoRData})
+```
+
+The zero tangent for `(5.0, [5.0])` is `t = (0.0, [0.0])`.
+`fdata(t)` returns `(NoFData(), [0.0])`, where the second element is `===` to the second element of `t`.
+`rdata(t)` returns `(0.0, NoRData())`.
+In this example, `t` contains a mixture of data, some of which is identified by its value, and some of which is identified by its address, so there is some fdata and some rdata.
+
+#### Structs
+
+Structs are handled in more-or-less the same way as `Tuple`s, albeit with the possibility of undefined fields needing to be explicitly handled.
+For example, a struct such as
+```jldoctest foo_fdata
+julia> struct Foo
+           x::Float64
+           y
+           z::Int
+       end
+```
+has tangent type
+```jldoctest foo_fdata
+julia> tangent_type(Foo)
+Tangent{@NamedTuple{x::Float64, y, z::NoTangent}}
+```
+Its fdata and rdata are given by special `FData` and `RData` types:
+```jldoctest foo_fdata
+julia> (fdata_type(tangent_type(Foo)), rdata_type(tangent_type(Foo)))
+(Tapir.FData{@NamedTuple{x::NoFData, y, z::NoFData}}, Tapir.RData{@NamedTuple{x::Float64, y, z::NoRData}})
+```
+Practically speaking, `FData` and `RData` both have the same structure as `Tangent`s and are just used in different contexts.
+
+#### Mutable Structs
+
+The fdata for a `mutable struct`s is its tangent, and it has no rdata.
+This is because `mutable struct`s have fixed memory addresses, and can therefore be incremented in-place.
+For example,
+```jldoctest bar_fdata
+julia> mutable struct Bar
+           x::Float64
+           y
+           z::Int
+       end
+```
+has tangent type
+```jldoctest bar_fdata
+julia> tangent_type(Bar)
+MutableTangent{@NamedTuple{x::Float64, y, z::NoTangent}}
+```
+and fdata / rdata types
+```jldoctest bar_fdata
+julia> (fdata_type(tangent_type(Bar)), rdata_type(tangent_type(Bar)))
+(MutableTangent{@NamedTuple{x::Float64, y, z::NoTangent}}, NoRData)
+```
+
+#### Primitive Types
+
+As with tangents, each primitive type must specify what its fdata and rdata is.
+See specific examples for details.
 """
 fdata_type(T)
 
@@ -265,10 +381,14 @@ fields_type(::Type{RData{T}}) where {T<:NamedTuple} = T
     return RData(increment_field!!(x.data, new_val, Val(f)))
 end
 
-"""
+@doc"""
     rdata_type(T)
 
 Returns the type of the reverse data of a tangent of type T.
+
+# Extended help
+
+See extended help in [`fdata_type`](@ref) docstring.
 """
 rdata_type(T)
 
@@ -345,6 +465,10 @@ end
     rdata(t)::rdata_type(typeof(t))
 
 Extract the reverse data from tangent `t`.
+
+# Extended help
+
+See extended help section of [fdata_type](@ref).
 """
 @generated function rdata(t::T) where {T}
 

@@ -17,7 +17,6 @@ include("front_matter.jl")
             include(joinpath("interpreter", "zero_like_rdata.jl"))
             include(joinpath("interpreter", "s2s_reverse_mode_ad.jl"))
         end
-        doctest(Tapir)
     elseif test_group == "rrules"
         include("test_utils.jl")
         @testset "rrules" begin

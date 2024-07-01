@@ -146,10 +146,124 @@ function __tangent_from_non_concrete(::Type{P}, fields) where {names, P<:NamedTu
 end
 
 """
-    tangent_type(T)
+    tangent_type(P)
 
-The type used to represent the tangent of an object of type `T` must be unique, and
-determined entirely by its type.
+There must be a single type used to represents tangents of primals of type `P`, and it must
+be given by `tangent_type(P)`.
+
+# Extended help
+
+The tangent types which Tapir.jl uses are quite similar in spirit to ChainRules.jl.
+For example, tangent "vectors" for
+1. `Float64`s are `Float64`s,
+1. `Vector{Float64}`s are `Vector{Float64}`s, and
+1. `struct`s are other another (special) `struct` with field types specified recursively.
+
+There are, however, some major differences.
+Firstly, while it is certainly true that the above tangent types are permissible in
+ChainRules.jl, they are not the uniquely permissible types. For example, `ZeroTangent` is
+also a permissible type of tangent for any of them, and `Float32` is permissible for
+`Float64`. This is a general theme in ChainRules.jl -- it intentionally declines to place
+restrictions on what type can be used to represent the tangent of a given type.
+
+Tapir.jl differs from this.
+**It insists that each primal type is associated to a _single_ tangent type.**
+Furthermore, this type is _always_ given by the function `Tapir.tangent_type(primal_type)`.
+
+Consider some more worked examples.
+
+#### Int
+
+`Int` is not a differentiable type, so its tangent type is `NoTangent`:
+```jldoctest
+julia> tangent_type(Int)
+NoTangent
+```
+
+#### Tuples
+
+The tangent type of a `Tuple` is defined recursively based on its field types. For example
+```jldoctest
+julia> tangent_type(Tuple{Float64, Vector{Float64}, Int})
+Tuple{Float64, Vector{Float64}, NoTangent}
+```
+
+There is one edge case to be aware of: if all of the field of a `Tuple` are
+non-differentiable, then the tangent type is `NoTangent`. For example,
+```jldoctest
+julia> tangent_type(Tuple{Int, Int})
+NoTangent
+```
+
+#### Structs
+
+As with `Tuple`s, the tangent type of a struct is, by default, given recursively.
+In particular, the tangent type of a `struct` type is `Tangent`.
+This type contains a `NamedTuple` containing the tangent to each field in the primal `struct`.
+
+As with `Tuple`s, if all field types are non-differentiable, the tangent type of the entire
+struct is `NoTangent`.
+
+There are a couple of additional subtleties to consider over `Tuple`s though. Firstly, not
+all fields of a `struct` have to be defined. Fortunately, Julia makes it easy to determine
+how many of the fields might possibly not be defined. The tangent associated to any field
+which might possibly not be defined is wrapped in a `PossiblyUninitTangent`.
+
+Furthermore, `struct`s can have fields whose static type is abstract. For example
+```jldoctest foo
+julia> struct Foo
+           x
+       end
+```
+If you ask for the tangent type of `Foo`, you will see that it is
+```jldoctest foo
+julia> tangent_type(Foo)
+Tangent{@NamedTuple{x}}
+```
+Observe that the field type associated to `x` is `Any`. The way to understand this result is
+to observe that
+1. `x` could have literally any type at runtime, so we know nothing about what its tangent
+    type must be until runtime, and
+1. we require that the tangent type of `Foo` be unique.
+The consequence of these two considerations is that the tangent type of `Foo` must be able
+to contain any type of tangent in its `x` field. It follows that the fieldtype of the `x`
+field of `Foo`s tangent must be `Any`.
+
+
+
+#### Mutable Structs
+
+The tangent type for `mutable struct`s have the same set of considerations as `struct`s.
+The only difference is that they must themselves be mutable.
+Consequently, we use a type called `MutableTangent` to represent their tangents.
+It is a `mutable struct` with the same structure as `Tangent`.
+
+For example, if you ask for the `tangent_type` of
+```jldoctest bar
+julia> mutable struct Bar
+           x::Float64
+       end
+```
+you will find that it is
+```jldoctest bar
+julia> tangent_type(Bar)
+MutableTangent{@NamedTuple{x::Float64}}
+```
+
+
+#### Primitive Types
+
+We've already seen a couple of primitive types (`Float64` and `Int`).
+The basic story here is that all primitive types require an explicit specification of what their tangent type must be.
+
+One interesting case are `Ptr` types.
+The tangent type of a `Ptr{P}` is `Ptr{T}`, where `T = tangent_type(P)`.
+For example
+```julia
+julia> tangent_type(Ptr{Float64})
+Ptr{Float64}
+```
+
 """
 tangent_type(T)
 

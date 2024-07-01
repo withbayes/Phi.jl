@@ -1,6 +1,8 @@
 """
     __value_and_pullback!!(rule, ȳ, f::CoDual, x::CoDual...)
 
+*Note:* this is not part of the public Tapir.jl interface, and may change without warning.
+
 In-place version of `value_and_pullback!!` in which the arguments have been wrapped in
 `CoDual`s. Note that any mutable data in `f` and `x` will be incremented in-place. As such,
 if calling this function multiple times with different values of `x`, should be careful to
@@ -34,7 +36,31 @@ __verify_sig(::typeof(rrule!!), fx::Tuple) = nothing
 """
     __value_and_gradient!!(rule, f::CoDual, x::CoDual...)
 
-Equivalent to `value_and_pullback(rule, 1.0, f, x...)` -- assumes `f` returns a `Float64`.
+*Note:* this is not part of the public Tapir.jl interface, and may change without warning.
+
+Equivalent to `__value_and_pullback!!(rule, 1.0, f, x...)` -- assumes `f` returns a `Float64`.
+
+```jldoctest
+# Set up the problem.
+f(x, y) = sum(x .* y)
+x = [2.0, 2.0]
+y = [1.0, 1.0]
+rule = build_rrule(f, x, y)
+
+# Allocate tangents. These will be written to in-place. You are free to re-use these if you
+# compute gradients multiple times.
+tf = zero_tangent(f)
+tx = zero_tangent(x)
+ty = zero_tangent(y)
+
+# Do AD.
+Tapir.__value_and_gradient!!(
+    rule, Tapir.CoDual(f, tf), Tapir.CoDual(x, tx), Tapir.CoDual(y, ty)
+)
+# output
+
+(4.0, (NoTangent(), [1.0, 1.0], [2.0, 2.0]))
+```
 """
 function __value_and_gradient!!(rule::R, fx::Vararg{CoDual, N}) where {R, N}
     return __value_and_pullback!!(rule, 1.0, fx...)
@@ -76,11 +102,25 @@ end
 """
     value_and_gradient!!(rule, f, x...)
 
-Equivalent to `value_and_pullback(rule, 1.0, f, x...)` -- assumes `f` returns a `Float64`.
+Equivalent to `value_and_pullback!!(rule, 1.0, f, x...)`, and assumes `f` returns a
+`Float64`.
 
 *Note:* There are lots of subtle ways to mis-use `value_and_pullback!!`, so we generally
-recommend using `value_and_gradient!!` (this function) where possible. Its docstring is
-useful for understanding this function though.
+recommend using [`value_and_gradient!!`](@ref) (this function) where possible. The docstring for
+`value_and_pullback!!` is useful for understanding this function though.
+
+An example:
+```jldoctest
+f(x, y) = sum(x .* y)
+x = [2.0, 2.0]
+y = [1.0, 1.0]
+rule = build_rrule(f, x, y)
+value_and_gradient!!(rule, f, x, y)
+
+# output
+
+(4.0, (NoTangent(), [1.0, 1.0], [2.0, 2.0]))
+```
 """
 function value_and_gradient!!(rule::R, fx::Vararg{Any, N}) where {R, N}
     return __value_and_gradient!!(rule, __create_coduals(fx)...)

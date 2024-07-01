@@ -59,8 +59,9 @@ end
 # Interop with ADTypes.
 function ADgradient(x::ADTypes.AutoTapir, ℓ)
     if x.safe_mode
-        msg = "Running Tapir in safe mode. Disable for best performance. Do this by " *
-            "using AutoTapir(safe_mode=false)."
+        msg = "Running Tapir in safe mode. This mode is computationally expensive, " *
+            "should only be used when debugging a problem with AD, and turned off in " *
+            "general use. Do this by using AutoTapir(safe_mode=false)."
         @info msg
     end
     return ADgradient(Val(:Tapir), ℓ; safety_on=x.safe_mode)

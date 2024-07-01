@@ -1,7 +1,6 @@
 using
     BenchmarkTools,
     DiffRules,
-    Documenter,
     FillArrays,
     JET,
     LinearAlgebra,

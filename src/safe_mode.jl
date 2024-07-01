@@ -6,6 +6,8 @@ Construct a callable which is equivalent to `pb`, but which enforces type-based 
 post-conditions to `pb`. Let `dx = pb.pb(dy)`, for some rdata `dy`, then this function
 - checks that `dy` has the correct rdata type for `y`, and
 - checks that each element of `dx` has the correct rdata type for `x`.
+
+Reverse pass counterpart to [`SafeRRule`](@ref)
 """
 struct SafePullback{Tpb, Ty, Tx}
     pb::Tpb
@@ -53,8 +55,13 @@ In particular:
 - check that the fdata in the `CoDual` returned from the rule is of the correct type for the
     primal.
 
-Additionally, dynamic checks may be performed (e.g. that an fdata array of the same size as
-its primal).
+This happens recursively.
+For example, each element of a `Vector{Any}` is compared against each element of the
+associated fdata to ensure that its type is correct, as this cannot be guaranteed from the
+static type alone.
+
+Some additional dynamic checks are also performed (e.g. that an fdata array of the same size
+as its primal).
 
 Let `rule` return `y, pb!!`, then `SafeRRule(rule)` returns `y, SafePullback(pb!!)`.
 `SafePullback` inserts the same kind of checks as `SafeRRule`, but on the reverse-pass. See
@@ -64,6 +71,11 @@ the docstring for details.
 necessary but insufficient set of conditions to ensure correctness. If you find that an
 error isn't being caught by these tests, but you believe it ought to be, please open an
 issue or (better still) a PR.
+
+*Note:* this is a "safe mode" in the sense of operating systems. See e.g. this Wikipedia
+article: https://en.wikipedia.org/wiki/Safe_mode . Its purpose is to help with debugging,
+and should not be used when trying to differentiate code in general, as it decreases
+performance quite substantially in many cases.
 """
 struct SafeRRule{Trule}
     rule::Trule

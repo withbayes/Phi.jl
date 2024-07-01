@@ -142,7 +142,7 @@ Optimising to get similar performance to `Enzyme.jl` is an on-going process.
 
 ### What things should work well
 
-Noteworthy things which should be work and be performant include:
+Noteworthy things which should work and be performant include:
 1. code containing control flow
 1. value-dependent control flow
 1. mutation of arrays and mutable structs
